@@ -1,0 +1,12 @@
+version: '3.8'
+
+services:
+  skillmap-dashboard:
+    build: .
+    container_name: skillmap-dashboard
+    ports:
+      - "8501:8501"
+    volumes:
+      # Mount the resources specific folder so changes to the excel file persist/update
+      - ./resources:/app/resources
+    restart: unless-stopped

@@ -6,143 +6,181 @@ import plotly.express as px
 # --- Configuration & Styling ---
 st.set_page_config(page_title="Competency Map Dashboard", layout="wide")
 
-# Custom Dark Mode Theme Application
+# Custom Light Mode Theme Application
 st.markdown("""
 <style>
     /* Main Background */
     .stApp {
-        background-color: #0E1117;
-        color: #FAFAFA;
-        font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+        background-color: #EAEDED;
+        color: #212529;
+        font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
     }
     
     /* Sidebar Background */
     [data-testid="stSidebar"] {
-        background-color: #161B22;
-        border-right: 1px solid #30363D;
+        background-color: #FFFFFF;
+        border-right: 1px solid #DEE2E6;
     }
     
     /* Headings */
     h1, h2, h3 {
-        color: #E6EDF3 !important;
-        font-weight: 600;
+        color: #0D1B2A !important;
+        font-weight: 700;
+        letter-spacing: -0.5px;
+        margin-top: 0px;
     }
     
     /* Metrics/Cards */
     div.css-1r6slb0, div.css-12w0qpk { 
-        background-color: #21262D;
-        border: 1px solid #30363D;
+        background-color: #FFFFFF;
+        border: 1px solid #DEE2E6;
         border-radius: 8px;
         padding: 15px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.05);
     }
 
     /* Custom classes for Gap Analysis */
     .gap-card {
-        background-color: #21262D;
-        border-left: 4px solid #FF7F50; /* Coral */
-        padding: 10px;
+        background-color: #FFFFFF;
+        border-left: 4px solid #922B21; /* Darker Muted Red */
+        border-top: 1px solid #E9ECEF;
+        border-right: 1px solid #E9ECEF;
+        border-bottom: 1px solid #E9ECEF;
+        padding: 15px;
         margin-bottom: 10px;
         border-radius: 4px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
     }
     .gap-tech {
-        font-weight: bold;
-        color: #E6EDF3;
+        font-weight: 600;
+        color: #212529;
+        font-size: 1.05em;
     }
     .gap-score {
         float: right;
-        color: #FF7F50;
+        color: #922B21;
+        font-weight: bold;
+    }
+    
+    /* General text adjustments */
+    p, label {
+        color: #495057;
     }
 
 </style>
 """, unsafe_allow_html=True)
 
-# --- Mock Data Generation ---
-# Team Members: 4 people
-# Categories: RPA, Backend, Frontend, Cloud
-
+# --- Data Loading (Sheet2 Only) ---
 @st.cache_data
 def get_data():
     try:
-        df = pd.read_excel("resources/skills.xlsx")
+        # Load Sheet2 directly
+        # Expected structure: Category, Skill, Member1, Member2...
+        df_raw = pd.read_excel("resources/skills.xlsx", sheet_name="Sheet2")
         
-        # Rename columns to match internal logic
-        # Excel: Colaborador, Categoria, Skill, Nível (0-5)
-        # Internal: Member, Category, Tech, Score
-        df = df.rename(columns={
-            "Colaborador": "Member",
-            "Categoria": "Category",
-            "Competência": "Tech",
-            "Nível (0-5)": "Score"
-        })
-        
-        # Ensure Score is numeric
-        df["Score"] = pd.to_numeric(df["Score"], errors='coerce').fillna(0)
-        
-        return df
+        # Normalize headers
+        # We enforce the first two columns to be 'Category' and 'Tech' to avoid naming issues
+        # and match the internal logic of the app.
+        if len(df_raw.columns) > 2:
+            df_raw.columns.values[0] = "Category"
+            df_raw.columns.values[1] = "Tech"
+            
+            # Identify member columns (all columns from index 2 onwards)
+            member_cols = df_raw.columns[2:].tolist()
+            
+            # Unpivot (Melt) to create the long format: Category, Tech, Member, Score
+            # This format is required for the individual dashboard views
+            df_long = df_raw.melt(
+                id_vars=["Category", "Tech"], 
+                value_vars=member_cols, 
+                var_name="Member", 
+                value_name="Score"
+            )
+            
+            # Ensure Score is numeric
+            df_long["Score"] = pd.to_numeric(df_long["Score"], errors='coerce').fillna(0)
+            
+            return df_long
+        else:
+            st.error("Sheet2 structure invalid. Expected at least 3 columns (Category, Skill, Members...).")
+            return pd.DataFrame()
+
     except FileNotFoundError:
-        st.error("File 'resources/skills.xlsx' not found. Please ensure the file exists.")
-        return pd.DataFrame(columns=["Member", "Category", "Tech", "Score"])
+        st.error("File 'resources/skills.xlsx' not found.")
+        return pd.DataFrame()
     except Exception as e:
         st.error(f"Error loading data: {e}")
-        return pd.DataFrame(columns=["Member", "Category", "Tech", "Score"])
+        return pd.DataFrame()
 
 df = get_data()
 
+if df.empty:
+    st.stop()
+
 # --- Sidebar ---
-st.sidebar.title("🛠️ Settings")
+st.sidebar.title("Settings")
 selected_member = st.sidebar.selectbox("Select Team Member", df["Member"].unique())
 
 all_cats = df["Category"].unique()
 selected_cats = st.sidebar.multiselect("Filter by Category", all_cats, default=all_cats)
 
-# Filter Data
+# Filter Data (Member View)
 member_data = df[(df["Member"] == selected_member) & (df["Category"].isin(selected_cats))].copy()
 
 # --- Main Layout ---
 st.title(f"Competency Map: {selected_member}")
 st.markdown("### Technical Proficiency Overview")
 
-col_radar, col_gap = st.columns([2, 1])
+col_summary, col_gap = st.columns([2, 1])
 
-# --- Radar Chart (Spider Chart) ---
-with col_radar:
-    # Aggregate score by Category for the Radar Chart
-    radar_df = member_data.groupby("Category")["Score"].mean().reset_index()
+# --- Executive Summary Chart (Grouped Bar) ---
+with col_summary:
+    # Aggregate score by Category
+    summary_df = member_data.groupby("Category")["Score"].mean().reset_index()
     
-    fig_radar = go.Figure()
-    fig_radar.add_trace(go.Scatterpolar(
-        r=radar_df['Score'],
-        theta=radar_df['Category'],
-        fill='toself',
+    fig_summary = go.Figure()
+    fig_summary.add_trace(go.Bar(
+        x=summary_df['Category'],
+        y=summary_df['Score'],
         name=selected_member,
-        line_color='#50C878', # Emerald
-        fillcolor='rgba(80, 200, 120, 0.3)'
+        marker_color='#566573', # Neutral Grey/Blue
+        text=summary_df['Score'].apply(lambda x: f"{x:.1f}"),
+        textposition='auto',
+        hovertemplate='<b>%{x}</b><br>Average Score: %{y:.2f}<extra></extra>'
     ))
     
-    fig_radar.update_layout(
-        polar=dict(
-            radialaxis=dict(
-                visible=True,
-                range=[0, 5],
-                gridcolor='#30363D',
-                linecolor='#30363D',
-                tickfont=dict(color='#8B949E')
-            ),
-            bgcolor='rgba(0,0,0,0)'
+    fig_summary.update_layout(
+        title={
+            'text': "Average Score by Category",
+            'x':0.5,
+            'xanchor': 'center',
+            'font': dict(size=16, color='#212529')
+        },
+        yaxis=dict(
+            visible=True,
+            range=[0, 5.5],
+            gridcolor='#E9ECEF',
+            linecolor='#E9ECEF',
+            title='Score',
+            title_font=dict(size=12, color='#6C757D')
         ),
-        paper_bgcolor='rgba(0,0,0,0)',
-        plot_bgcolor='rgba(0,0,0,0)',
-        font=dict(color='#E6EDF3'),
-        margin=dict(l=40, r=40, t=20, b=20),
+        xaxis=dict(
+            linecolor='#E9ECEF',
+            tickfont=dict(color='#212529')
+        ),
+        paper_bgcolor='#FFFFFF',
+        plot_bgcolor='#FFFFFF',
+        font=dict(color='#212529'),
+        margin=dict(l=40, r=40, t=40, b=20),
         showlegend=False
     )
     
-    st.plotly_chart(fig_radar, use_container_width=True)
+    st.plotly_chart(fig_summary, use_container_width=True)
 
-# --- Gap Analysis (Levels 0-1) ---
+# --- Gap Analysis (Levels 0-2) ---
 with col_gap:
-    st.markdown("### 🚀 Gap Analysis")
-    st.markdown("<div style='font-size: 0.9em; color: #8B949E; margin-bottom: 15px;'>Priority Learning Areas (Score ≤ 2)</div>", unsafe_allow_html=True)
+    st.markdown("### Gap Analysis")
+    st.markdown("<div style='font-size: 0.9em; color: #6C757D; margin-bottom: 15px;'>Priority Learning Areas (Score ≤ 2)</div>", unsafe_allow_html=True)
     
     gaps = member_data[member_data["Score"] <= 2]
     
@@ -152,24 +190,21 @@ with col_gap:
         for idx, row in gaps.iterrows():
             st.markdown(f"""
             <div class="gap-card">
-                <div class="gap-tech">{row['Tech']} <span style='font-size:0.8em; color:#8B949E'>({row['Category']})</span></div>
+                <div class="gap-tech">{row['Tech']} <span style='font-size:0.8em; color:#6C757D'>({row['Category']})</span></div>
                 <div class="gap-score">Level {row['Score']}</div>
                 <div style="clear:both;"></div>
             </div>
             """, unsafe_allow_html=True)
 
-# --- Horizontal Bar Chart (Detailed Skills) ---
-st.markdown("### 📊 Skill Detail Breakdown")
+# --- Detailed Skills Bar Chart ---
+st.markdown("### Skill Detail Breakdown")
 
-# Color mapping logic
 def get_color(score):
-    if score >= 4: return '#50C878'
-    elif score == 3: return '#F1C40F'
-    else: return '#FF7F50'
+    if score >= 4: return '#2E4053' # Dark Slate
+    elif score == 3: return '#7F8C8D' # Concrete Grey
+    else: return '#922B21' # Dark Red
 
 member_data['Color'] = member_data['Score'].apply(get_color)
-
-# Sort by Score (Ascending) so that Higher scores appear at the Top of the chart
 member_data = member_data.sort_values(by="Score", ascending=True)
 
 fig_bar = go.Figure()
@@ -179,26 +214,28 @@ fig_bar.add_trace(go.Bar(
     orientation='h',
     marker=dict(color=member_data['Color']),
     text=member_data['Score'],
-    textposition='auto'
+    textposition='auto',
+    hovertemplate='<b>%{y}</b><br>Score: %{x}<extra></extra>'
 ))
 
 fig_bar.update_layout(
     xaxis=dict(
         range=[0, 5.5],
-        gridcolor='#30363D',
+        gridcolor='#E9ECEF',
         title="Proficiency Level (0-5)",
-        tickfont=dict(color='#8B949E'),
-        title_font=dict(color='#8B949E')
+        tickfont=dict(color='#6C757D'),
+        title_font=dict(color='#6C757D')
     ),
     yaxis=dict(
-        tickfont=dict(color='#E6EDF3'),
+        tickfont=dict(color='#212529'),
         automargin=True
     ),
-    paper_bgcolor='rgba(0,0,0,0)',
-    plot_bgcolor='rgba(0,0,0,0)',
-    font=dict(color='#E6EDF3'),
-    height=400 + (len(member_data) * 15), # Dynamic height
+    paper_bgcolor='#FFFFFF',
+    plot_bgcolor='#FFFFFF',
+    font=dict(color='#212529'),
+    height=400 + (len(member_data) * 15),
     margin=dict(l=20, r=20, t=20, b=20),
 )
 
 st.plotly_chart(fig_bar, use_container_width=True)
+

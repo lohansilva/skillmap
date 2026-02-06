@@ -142,9 +142,9 @@ with col_radar:
 # --- Gap Analysis (Levels 0-1) ---
 with col_gap:
     st.markdown("### 🚀 Gap Analysis")
-    st.markdown("<div style='font-size: 0.9em; color: #8B949E; margin-bottom: 15px;'>Skills requiring attention (Score ≤ 1)</div>", unsafe_allow_html=True)
+    st.markdown("<div style='font-size: 0.9em; color: #8B949E; margin-bottom: 15px;'>Priority Learning Areas (Score ≤ 2)</div>", unsafe_allow_html=True)
     
-    gaps = member_data[member_data["Score"] <= 1]
+    gaps = member_data[member_data["Score"] <= 2]
     
     if gaps.empty:
         st.success("No critical skill gaps found for this selection!")

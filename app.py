@@ -67,6 +67,8 @@ st.markdown("""
         color: #495057;
     }
 
+
+
 </style>
 """, unsafe_allow_html=True)
 
@@ -135,6 +137,7 @@ col_summary, col_gap = st.columns([2, 1])
 
 # --- Executive Summary Chart (Grouped Bar) ---
 with col_summary:
+    st.markdown("### Average Score by Category")
     # Aggregate score by Category
     summary_df = member_data.groupby("Category")["Score"].mean().reset_index()
     
@@ -150,12 +153,7 @@ with col_summary:
     ))
     
     fig_summary.update_layout(
-        title={
-            'text': "Average Score by Category",
-            'x':0.5,
-            'xanchor': 'center',
-            'font': dict(size=16, color='#212529')
-        },
+        # title removed to align with markdown header
         yaxis=dict(
             visible=True,
             range=[0, 5.5],
@@ -179,15 +177,15 @@ with col_summary:
 
 # --- Gap Analysis (Levels 0-2) ---
 with col_gap:
-    st.markdown("### Gap Analysis")
-    st.markdown("<div style='font-size: 0.9em; color: #6C757D; margin-bottom: 15px;'>Priority Learning Areas (Score ≤ 2)</div>", unsafe_allow_html=True)
+    st.markdown("### Gap Analysis (Score <= 2)")
     
     gaps = member_data[member_data["Score"] <= 2]
     
     if gaps.empty:
         st.success("No critical skill gaps found for this selection!")
     else:
-        for idx, row in gaps.iterrows():
+        # Limit to 5 cards
+        for idx, row in gaps.head(5).iterrows():
             st.markdown(f"""
             <div class="gap-card">
                 <div class="gap-tech">{row['Tech']} <span style='font-size:0.8em; color:#6C757D'>({row['Category']})</span></div>
@@ -195,6 +193,9 @@ with col_gap:
                 <div style="clear:both;"></div>
             </div>
             """, unsafe_allow_html=True)
+            
+        if len(gaps) > 5:
+             st.markdown(f"<div style='font-size: 0.8em; color: #6C757D; text-align: center; margin-top: 5px;'>+ {len(gaps) - 5} more...</div>", unsafe_allow_html=True)
 
 # --- Detailed Skills Bar Chart ---
 st.markdown("### Skill Detail Breakdown")

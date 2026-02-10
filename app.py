@@ -268,3 +268,61 @@ fig_bar.update_layout(
 
 st.plotly_chart(fig_bar, use_container_width=True)
 
+# --- Development Plan Timeline (Mock Data) ---
+from mock_data import get_mock_plan_data
+from datetime import datetime
+
+st.markdown("### Development Plan Progress")
+
+# Get mock data for the selected member
+plan_df = get_mock_plan_data(selected_member)
+
+if not plan_df.empty:
+    # Color mapping for status
+    # Color mapping for status
+    status_colors = {
+        "Done": "rgba(20, 90, 50, 0.8)",        # Dark Transparent Green
+        "In Progress": "rgba(180, 100, 10, 0.8)", # Dark Transparent Orange
+        "Not Started": "rgba(127, 140, 141, 0.6)", # Dark Transparent Grey
+        "Overdue": "rgba(123, 36, 28, 0.8)"      # Dark Transparent Red
+    }
+    
+    fig_timeline = px.timeline(
+        plan_df, 
+        x_start="Start", 
+        x_end="Finish", 
+        y="Task",
+        color="Status",
+        color_discrete_map=status_colors,
+        hover_data=["Skill", "Category", "Completion"],
+        title="" # Title hidden to use markdown header
+    )
+    
+    # Customize layout
+    fig_timeline.update_yaxes(autorange="reversed") # Newer tasks at top
+    fig_timeline.update_layout(
+        xaxis=dict(
+            title="Timeline",
+            gridcolor='#E9ECEF',
+            linecolor='#E9ECEF',
+            tickfont=dict(color='#6C757D')
+        ),
+        yaxis=dict(
+            title="",
+            tickfont=dict(color='#212529')
+        ),
+        paper_bgcolor='#FFFFFF',
+        plot_bgcolor='#FFFFFF',
+        font=dict(color='#212529'),
+        margin=dict(l=20, r=20, t=20, b=20),
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+    )
+    
+    # Add "Today" reference line
+    # Using timestamp * 1000 (milliseconds) to avoid TypeError in Plotly with datetime objects
+    fig_timeline.add_vline(x=datetime.now().timestamp() * 1000, line_width=1, line_dash="dash", line_color="#E74C3C", annotation_text="Today")
+    
+    st.plotly_chart(fig_timeline, use_container_width=True)
+else:
+    st.info("No development plan found for this member.")
+

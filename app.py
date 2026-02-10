@@ -11,14 +11,14 @@ st.markdown("""
 <style>
     /* Main Background */
     .stApp {
-        background-color: #EAEDED;
+        background-color: #FFFFFF;
         color: #212529;
         font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
     }
     
     /* Sidebar Background */
     [data-testid="stSidebar"] {
-        background-color: #FFFFFF;
+        background-color: #EAEDED;
         border-right: 1px solid #DEE2E6;
     }
     
@@ -123,11 +123,38 @@ if df.empty:
 st.sidebar.title("Settings")
 selected_member = st.sidebar.selectbox("Select Team Member", df["Member"].unique())
 
-all_cats = df["Category"].unique()
-selected_cats = st.sidebar.multiselect("Filter by Category", all_cats, default=all_cats)
-
 # Filter Data (Member View)
-member_data = df[(df["Member"] == selected_member) & (df["Category"].isin(selected_cats))].copy()
+member_data = df[df["Member"] == selected_member].copy()
+
+# --- Sidebar Insights ---
+if not member_data.empty:
+    st.sidebar.markdown("---")
+    st.sidebar.subheader("Profile Summary")
+    
+    # 1. Overall Average
+    avg_score = member_data['Score'].mean()
+    st.sidebar.metric("Overall Average", f"{avg_score:.2f}")
+    
+    # 2. Top Category
+    cat_scores = member_data.groupby("Category")["Score"].mean()
+    if not cat_scores.empty:
+        best_cat = cat_scores.idxmax()
+        best_cat_score = cat_scores.max()
+        st.sidebar.markdown(f"**Top Strength:**")
+        st.sidebar.markdown(f"{best_cat} ({best_cat_score:.1f})")
+        
+    # 3. Level Distribution
+    st.sidebar.markdown("---")
+    st.sidebar.subheader("Level Distribution")
+    
+    expert_count = len(member_data[member_data['Score'] == 5])
+    competent_count = len(member_data[member_data['Score'].between(3, 4)])
+    apprentice_count = len(member_data[member_data['Score'].between(0, 2)])
+    
+    
+    st.sidebar.markdown(f"**Expert (5):** {expert_count}")
+    st.sidebar.markdown(f"**Competent (3-4):** {competent_count}")
+    st.sidebar.markdown(f"**Apprentice (0-2):** {apprentice_count}")
 
 # --- Main Layout ---
 st.title(f"Competency Map: {selected_member}")
@@ -216,7 +243,8 @@ fig_bar.add_trace(go.Bar(
     marker=dict(color=member_data['Color']),
     text=member_data['Score'],
     textposition='auto',
-    hovertemplate='<b>%{y}</b><br>Score: %{x}<extra></extra>'
+    customdata=member_data['Category'],  # Add Category data
+    hovertemplate='<b>%{y}</b><br>Category: %{customdata}<br>Score: %{x}<extra></extra>'
 ))
 
 fig_bar.update_layout(

@@ -315,7 +315,15 @@ if not plan_df.empty:
         plot_bgcolor='#FFFFFF',
         font=dict(color='#212529'),
         margin=dict(l=20, r=20, t=20, b=20),
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+        showlegend=True,
+        legend=dict(
+            title=dict(text="Status"),
+            orientation="h", 
+            yanchor="bottom", 
+            y=1.02, 
+            xanchor="right", 
+            x=1
+        )
     )
     
     # Add "Today" reference line

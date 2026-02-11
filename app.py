@@ -11,14 +11,14 @@ st.markdown("""
 <style>
     /* Main Background */
     .stApp {
-        background-color: #EAEDED;
+        background-color: #FFFFFF;
         color: #212529;
         font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
     }
     
     /* Sidebar Background */
     [data-testid="stSidebar"] {
-        background-color: #FFFFFF;
+        background-color: #EAEDED;
         border-right: 1px solid #DEE2E6;
     }
     
@@ -66,6 +66,8 @@ st.markdown("""
     p, label {
         color: #495057;
     }
+
+
 
 </style>
 """, unsafe_allow_html=True)
@@ -121,11 +123,38 @@ if df.empty:
 st.sidebar.title("Settings")
 selected_member = st.sidebar.selectbox("Select Team Member", df["Member"].unique())
 
-all_cats = df["Category"].unique()
-selected_cats = st.sidebar.multiselect("Filter by Category", all_cats, default=all_cats)
-
 # Filter Data (Member View)
-member_data = df[(df["Member"] == selected_member) & (df["Category"].isin(selected_cats))].copy()
+member_data = df[df["Member"] == selected_member].copy()
+
+# --- Sidebar Insights ---
+if not member_data.empty:
+    st.sidebar.markdown("---")
+    st.sidebar.subheader("Profile Summary")
+    
+    # 1. Overall Average
+    avg_score = member_data['Score'].mean()
+    st.sidebar.metric("Overall Average", f"{avg_score:.2f}")
+    
+    # 2. Top Category
+    cat_scores = member_data.groupby("Category")["Score"].mean()
+    if not cat_scores.empty:
+        best_cat = cat_scores.idxmax()
+        best_cat_score = cat_scores.max()
+        st.sidebar.markdown(f"**Top Strength:**")
+        st.sidebar.markdown(f"{best_cat} ({best_cat_score:.1f})")
+        
+    # 3. Level Distribution
+    st.sidebar.markdown("---")
+    st.sidebar.subheader("Level Distribution")
+    
+    expert_count = len(member_data[member_data['Score'] == 5])
+    competent_count = len(member_data[member_data['Score'].between(3, 4)])
+    apprentice_count = len(member_data[member_data['Score'].between(0, 2)])
+    
+    
+    st.sidebar.markdown(f"**Expert (5):** {expert_count}")
+    st.sidebar.markdown(f"**Competent (3-4):** {competent_count}")
+    st.sidebar.markdown(f"**Apprentice (0-2):** {apprentice_count}")
 
 # --- Main Layout ---
 st.title(f"Competency Map: {selected_member}")
@@ -135,6 +164,7 @@ col_summary, col_gap = st.columns([2, 1])
 
 # --- Executive Summary Chart (Grouped Bar) ---
 with col_summary:
+    st.markdown("### Average Score by Category")
     # Aggregate score by Category
     summary_df = member_data.groupby("Category")["Score"].mean().reset_index()
     
@@ -150,12 +180,7 @@ with col_summary:
     ))
     
     fig_summary.update_layout(
-        title={
-            'text': "Average Score by Category",
-            'x':0.5,
-            'xanchor': 'center',
-            'font': dict(size=16, color='#212529')
-        },
+        # title removed to align with markdown header
         yaxis=dict(
             visible=True,
             range=[0, 5.5],
@@ -179,15 +204,15 @@ with col_summary:
 
 # --- Gap Analysis (Levels 0-2) ---
 with col_gap:
-    st.markdown("### Gap Analysis")
-    st.markdown("<div style='font-size: 0.9em; color: #6C757D; margin-bottom: 15px;'>Priority Learning Areas (Score ≤ 2)</div>", unsafe_allow_html=True)
+    st.markdown("### Gap Analysis (Score <= 2)")
     
     gaps = member_data[member_data["Score"] <= 2]
     
     if gaps.empty:
         st.success("No critical skill gaps found for this selection!")
     else:
-        for idx, row in gaps.iterrows():
+        # Limit to 5 cards
+        for idx, row in gaps.head(5).iterrows():
             st.markdown(f"""
             <div class="gap-card">
                 <div class="gap-tech">{row['Tech']} <span style='font-size:0.8em; color:#6C757D'>({row['Category']})</span></div>
@@ -195,6 +220,9 @@ with col_gap:
                 <div style="clear:both;"></div>
             </div>
             """, unsafe_allow_html=True)
+            
+        if len(gaps) > 5:
+             st.markdown(f"<div style='font-size: 0.8em; color: #6C757D; text-align: center; margin-top: 5px;'>+ {len(gaps) - 5} more...</div>", unsafe_allow_html=True)
 
 # --- Detailed Skills Bar Chart ---
 st.markdown("### Skill Detail Breakdown")
@@ -215,7 +243,8 @@ fig_bar.add_trace(go.Bar(
     marker=dict(color=member_data['Color']),
     text=member_data['Score'],
     textposition='auto',
-    hovertemplate='<b>%{y}</b><br>Score: %{x}<extra></extra>'
+    customdata=member_data['Category'],  # Add Category data
+    hovertemplate='<b>%{y}</b><br>Category: %{customdata}<br>Score: %{x}<extra></extra>'
 ))
 
 fig_bar.update_layout(
@@ -238,4 +267,70 @@ fig_bar.update_layout(
 )
 
 st.plotly_chart(fig_bar, use_container_width=True)
+
+# --- Development Plan Timeline (Mock Data) ---
+from mock_data import get_mock_plan_data
+from datetime import datetime
+
+st.markdown("### Development Plan Progress")
+
+# Get mock data for the selected member
+plan_df = get_mock_plan_data(selected_member)
+
+if not plan_df.empty:
+    # Color mapping for status
+    # Color mapping for status
+    status_colors = {
+        "Done": "rgba(20, 90, 50, 0.8)",        # Dark Transparent Green
+        "In Progress": "rgba(180, 100, 10, 0.8)", # Dark Transparent Orange
+        "Not Started": "rgba(127, 140, 141, 0.6)", # Dark Transparent Grey
+        "Overdue": "rgba(123, 36, 28, 0.8)"      # Dark Transparent Red
+    }
+    
+    fig_timeline = px.timeline(
+        plan_df, 
+        x_start="Start", 
+        x_end="Finish", 
+        y="Task",
+        color="Status",
+        color_discrete_map=status_colors,
+        hover_data=["Skill", "Category", "Completion"],
+        title="" # Title hidden to use markdown header
+    )
+    
+    # Customize layout
+    fig_timeline.update_yaxes(autorange="reversed") # Newer tasks at top
+    fig_timeline.update_layout(
+        xaxis=dict(
+            title="Timeline",
+            gridcolor='#E9ECEF',
+            linecolor='#E9ECEF',
+            tickfont=dict(color='#6C757D')
+        ),
+        yaxis=dict(
+            title="",
+            tickfont=dict(color='#212529')
+        ),
+        paper_bgcolor='#FFFFFF',
+        plot_bgcolor='#FFFFFF',
+        font=dict(color='#212529'),
+        margin=dict(l=20, r=20, t=20, b=20),
+        showlegend=True,
+        legend=dict(
+            title=dict(text="Status"),
+            orientation="h", 
+            yanchor="bottom", 
+            y=1.02, 
+            xanchor="right", 
+            x=1
+        )
+    )
+    
+    # Add "Today" reference line
+    # Using timestamp * 1000 (milliseconds) to avoid TypeError in Plotly with datetime objects
+    fig_timeline.add_vline(x=datetime.now().timestamp() * 1000, line_width=1, line_dash="dash", line_color="#E74C3C", annotation_text="Today")
+    
+    st.plotly_chart(fig_timeline, use_container_width=True)
+else:
+    st.info("No development plan found for this member.")
 
